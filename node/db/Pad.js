@@ -52,7 +52,7 @@ Class('Pad', {
     
     publicStatus : {
       is: 'rw',
-      init: false,
+      init: true,
       getterName : 'getPublicStatus'
     }, //publicStatus
     
@@ -486,12 +486,20 @@ Class('Pad', {
     },
     setPassword: function(password)
     {
-      this.passwordHash = password == null ? null : hash(password, generateSalt());
+      if(password == null){  
+        this.passwordHash = null;
+      }else{
+        this.passwordHash = hash(password, generateSalt());
+      }
       db.setSub("pad:"+this.id, ["passwordHash"], this.passwordHash);
     }, 
+	getPasswordSalt: function()
+	{
+		return this.passwordHash == null? null:this.passwordHash.split("$")[1];
+	},
     isCorrectPassword: function(password)
     {
-      return compare(this.passwordHash, password)
+      return timeSensitiveCompare(this.passwordHash, password)
     }, 
     isPasswordProtected: function()
     {
@@ -504,7 +512,7 @@ Class('Pad', {
 
 function hash(password, salt)
 {
-  var shasum = crypto.createHash('sha512');
+  var shasum = crypto.createHash('sha256');
   shasum.update(password + salt);
   return shasum.digest("hex") + "$" + salt;
 }
@@ -512,17 +520,20 @@ function hash(password, salt)
 function generateSalt()
 {
   var len = 86;
-  var chars = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz./";
+  var charset = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz./";
   var randomstring = '';
   for (var i = 0; i < len; i++)
   {
-    var rnum = Math.floor(Math.random() * chars.length);
-    randomstring += chars.substring(rnum, rnum + 1);
+    randomstring += charset[Math.floor(Math.random() * charset.length)];
   }
   return randomstring;
 }
 
-function compare(hashStr, password)
+/* Compare the timed password hash with the saved value.
+ * If the hash was generated too far in the past, it is rejected. */
+function timeSensitiveCompare(hashStr, password)
 {
-  return hash(password, hashStr.split("$")[1]) === hashStr;  
+  var timestamp = password.split("$")[1];
+  return password === hash(hashStr, timestamp)
+    && timestamp > new Date().getTime();
 }

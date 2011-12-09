@@ -88,39 +88,43 @@
         </style> 
         <link href="static/custom/index.css" rel="stylesheet"> 
         <script src="static/custom/index.js"></script>
+        <script src="static/js/jquery.min.js"></script>
         <div id="container"> 
             <div id="button" onclick="go2Random()">New Pad</div><br><div id="label">or create/open a Pad with the name</div> 
             <form action="#" onsubmit="go2Name();return false;"> 
-                    <input type="text" id="padname" autofocus> 
-                    <input type="submit" value="OK"> 
+                    <input type="text" id="padname" autofocus/> 
+					<input type="submit" value="OK"/><br/>
             </form> 
         </div> 
         <script> 
             function go2Name() 
             {
-                var padname = document.getElementById("padname").value;
-                padname.length > 0 ? window.location = "p/" + padname : alert("Please enter a name")
+                var padname = $("#padname").val();
+				if(padname.length > 0){
+            window.location = "p/" + padname;
+				}
+				else
+				{
+					alert("Please enter a name");
+				}
             }
  
             function go2Random() 
             {
-                window.location = "p/" + randomPadName();
+				$("#padname").val(randomPadName());
+				go2Name();
             }
  
             function randomPadName() 
             {
                 var chars = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
-                var string_length = 10;
                 var randomstring = '';
-                for (var i = 0; i < string_length; i++) 
+                for (var i = 0; i < 10; i++) 
                 {
-                    var rnum = Math.floor(Math.random() * chars.length);
-                    randomstring += chars.substring(rnum, rnum + 1);
+                    randomstring += chars[Math.floor(Math.random() * chars.length)];
                 }
                 return randomstring;
-            }
-            
-            //start the costum js
-            if(typeof costumStart == "function") costumStart();
+			}
+            if(typeof customStart == "function") customStart();
         </script> 
 </html>
