@@ -234,15 +234,16 @@ var padimpexp = (function()
       $("#exporthtmla").attr("href", document.location.pathname + "/export/html");
       $("#exportplaina").attr("href", document.location.pathname + "/export/txt");
       $("#exportwordlea").attr("href", document.location.pathname + "/export/wordle");
-      
+      //FIXME the client_id needs to be configurable since (at least) every domain owner needs a dedicated one.
+      $("#exportgithuba").attr("href", "https://github.com/login/oauth/authorize?client_id=a7845068707943ffa5f2&scope=repo&redirect_uri="+document.location+"/export/github");
       //hide stuff thats not avaible if abiword is disabled
       if(clientVars.abiwordAvailable == "no")
       {
         $("#exportworda").remove();
         $("#exportpdfa").remove();
         $("#exportopena").remove();
-        $("#importexport").css({"height":"95px"});
-        $("#importexportline").css({"height":"95px"});
+        $("#importexport").css({"height":"120px"}); //FIXME this is not the right place for that kind of absolute value.
+        $("#importexportline").css({"height":"120px"});
         $("#import").html("Import is not available");
       }
       else if(clientVars.abiwordAvailable == "withoutPDF")
@@ -252,8 +253,8 @@ var padimpexp = (function()
         $("#exportworda").attr("href", document.location.pathname + "/export/doc");
         $("#exportopena").attr("href", document.location.pathname + "/export/odt");
         
-        $("#importexport").css({"height":"142px"});
-        $("#importexportline").css({"height":"142px"});
+        $("#importexport").css({"height":"167px"});
+        $("#importexportline").css({"height":"167px"});
         
         $("#importform").get(0).setAttribute('action', document.location.href + "/import"); 
       }

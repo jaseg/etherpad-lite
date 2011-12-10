@@ -14,9 +14,9 @@ githubInterface.importPad = function (padId, user, repo, commit, file)
 	function importCommit(apipath, commit, file)
 	{
 		var path = file.split("/");
-		httpsGetJSON({host: "api.github.com", path: apipath+"/commits/"+commit}, function (data)
+		$.getJSON("api.github.com"+apipath+"/commits/"+commit}, function (data)
 				{
-					httpsGetJSON(url.parse(commitObject.tree.url), function (treeObject)
+					$.getJSON(commitObject.tree.url, function (treeObject)
 							{
 								var currentElement;
 								//get bottommost non-empty element
@@ -26,7 +26,7 @@ githubInterface.importPad = function (padId, user, repo, commit, file)
 									if(leaf.path === currentElement)
 									{
 										if(path.length() > 0){
-											httpsGetJSON(url.parse(leaf.url), traversePath(treeObject, path));
+                        $.getJSON(leaf.url, traversePath(treeObject, path));
 										}
 										else
 										{
@@ -46,7 +46,7 @@ githubInterface.importPad = function (padId, user, repo, commit, file)
 	pad.githubData = {user: user, repo: repo};
 	if(commit == null)
 	{
-		httpsGetJSON({host: "api.github.com", path: apipath+"/refs/heads/master"}, function (data)
+		$.getJSON("api.github.com"+apipath+"/refs/heads/master", function (data)
 				{
 					importCommit(apipath, data.object.sha, file);
 				});
@@ -55,24 +55,6 @@ githubInterface.importPad = function (padId, user, repo, commit, file)
 	{
 		importCommit(apipath, commit, file);
 	}
-}
-
-function httpsGetJSON(params, callback)
-{
-	https.get(params, function (res)
-			{
-				var data = "";
-				res.on("data", function (chunk)
-					{
-						data += chunk;
-					});
-				res.on("end", function ()
-					{
-						console.log("Github interface http get status code: ", res.statusCode);
-						//FIXME parse data as json
-						callback(data);
-					});
-			});
 }
 
 githubInterface.commitAndPush = function (padId, message, branch, callback, user, repo)
@@ -86,18 +68,12 @@ githubInterface.commitAndPush = function (padId, message, branch, callback, user
 	if(repo == null)
 		callback({error: "no user given"});
 	var apipath = "/repos/"+user+"/"+repo+"/git";
-	var pad;
-	padManager.getPad(padId, function(err, _pad)
-			{
-				pad = _pad;
-				callback(err);
-			});
 	var path = file.split("/");
-	httpsGetJSON({host: "api.github.com", path: apipath+"/refs/heads/master"}, function (data)
+	httpsGetJSON("api.github.com"+apipath+"/refs/heads/master"}, function (data)
 			{
-				httpsGetJSON({host: "api.github.com", path: apipath+"/commits/"+data.object.sha}, function (commitObject)
+				httpsGetJSON({"api.github.com"+apipath+"/commits/"+data.object.sha}, function (commitObject)
 						{
-							httpsGetJSON(url.parse(commitObject.tree.url), function (treeObject)
+							httpsGetJSON(commitObject.tree.url, function (treeObject)
 									{
 										var currentElement;
 										//get bottommost non-empty element
@@ -107,12 +83,12 @@ githubInterface.commitAndPush = function (padId, message, branch, callback, user
 											if(leaf.path === currentElement)
 											{
 												if(path.length() > 0){
-													httpsGetJSON(url.parse(leaf.url), traversePath(treeObject, path));
+													httpsGetJSON(leaf.url, traversePath(treeObject, path));
 												}
 												else
 												{
 													//reached the file.
-													httpsGetJSON(url.parse(leaf.url), function (blob)
+													httpsGetJSON(leaf.url, function (blob)
 															{
 																pad.setText(blob.content);
 																padMessageHandler.updatePadClients(pad, callback);

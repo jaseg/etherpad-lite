@@ -24,6 +24,8 @@ var async = require("async");
 var fs = require("fs");
 var settings = require('../utils/Settings');
 var os = require('os');
+var https = require('https');
+var querystring = require('querystring');
 
 //load abiword only if its enabled
 if(settings.abiword != null)
@@ -40,10 +42,15 @@ if(os.type().indexOf("Windows") > -1)
 /**
  * do a requested export
  */ 
-exports.doExport = function(req, res, padId, type)
+exports.doExport = function(req, res)
 {
-  //tell the browser that this is a downloadable file
-  res.attachment(padId + "." + type);
+  var padId = req.params.pad;
+  var type = req.params.type;
+  if(type != "github")
+  {
+    //tell the browser that this is a downloadable file
+    res.attachment(padId + "." + type);
+  }
 
   //if this is a plain text export, we can do this directly
   if(type == "txt")
@@ -54,6 +61,42 @@ exports.doExport = function(req, res, padId, type)
         throw err;
          
       res.send(pad.text());
+    });
+  }
+  else if(type == "github")
+  {
+    padManager.getPad(padId, function(err, pad)
+    {
+      if(err)
+        throw err;
+      console.log("getting github access token with code "+req.params.code);
+      //FIXME the client secret and id need to be configurable
+      var token_post_data = querystring.stringify({
+          client_id: "a7845068707943ffa5f2",
+          client_secret: "6996ec127db3f81bc32b1e56eeacf920ff9d3ba4",
+          code: req.query.code
+        });
+      var treq = https.request({
+          host: "github.com",
+          path: "/login/oauth/access_token",
+          method: "POST",
+          headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+            'Content-Length': token_post_data.length
+          }
+        }, function(tres){
+          tres.setEncoding('utf8');
+          //FIXME is it safe to assume all data will arrive in one chunk?
+          tres.on('data', function(chunk){
+              console.log("received access token chunk from github: "+chunk);
+              var github_info = querystring.parse(chunk);
+              res.redirect("/p/"+padId+"?github_export_token="+github_info.access_token);
+            });
+        }).on('error', function(e){
+          console.log("github error: "+e);
+        });
+      treq.write(token_post_data);
+      treq.end();
     });
   }
   else
