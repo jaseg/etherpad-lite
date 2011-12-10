@@ -446,6 +446,15 @@ var pad = {
         padeditor.ace.focus();
       }, 0);
     }
+    //if the url parameter github_export_token is set, perform a github export.
+    var github_export_token = window.location.search.split("github_export_token=")[1];
+    if(github_export_token)
+    {
+      $("#githubexportbox").show();
+      $.getScript("/static/js/GithubInterface.js", function(data, statusMessage){
+          githubInterface.populateGithubFolderView(null, github_export_token);
+        });
+    }
   },
   dispose: function()
   {

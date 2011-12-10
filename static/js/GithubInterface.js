@@ -1,7 +1,62 @@
 
-var githubInterface = {};
-var https = require('https');
+var githubInterface = {
+//  parents: Array.new();
+};
 
+githubInterface.populateGithubFolderView = function(location, token){
+  console.log("foo");
+  /*var output = $("#githubfolderview");
+  if(location == null)
+  { //list the user's repositories
+    $.getJSON("https://api.github.com/user/repos?access_token="+token, function(data){
+        output.html(null);
+        for(var i in data){
+          var element = '';
+          element += "<a href=\"#\" onClick=\"githubInterface.populateGithubFolderView(null, '"+data[i].url+"', '"+token+"')\" class=\"githubfolderentry githubrepo\">";
+          element += data[i].name;
+          element += '</a>';
+          output.append(element);
+        }
+      });
+  }
+  else
+  {
+    if(githubInterface.parents.size() == 0)
+    { //list master branch top-level
+      /*$.getJSON(location+"/git/refs/heads/master?access_token="+token, function(ref){
+          $.getJSON(ref.object.url, function(commit){
+            githubInterface.populateGithubFolderViewWithTree(output, commit.tree.url, token);
+          });
+        });
+        */
+    }
+    else
+    { //list subfolder
+      //githubInterface.populateGithubFolderViewWithTree(output, location, token);
+    }
+  }*/
+}
+
+//githubInterface.populateGithubFolderViewWithTree = function(output, location, token){
+  /*$.getJSON(location, function(tree){
+      output.html(null);
+      for(var i in tree.tree){
+        var element = '';
+        if(tree.tree[i].type == "tree"){
+          element += "<a href=\"#\" onClick=\"githubInterface.populateGithubFolderView('"+tree.tree[i].url+"', '"+token+"')\" class=\"githubfolderentry githubtree\">";
+        }
+        else
+        {
+          element += "<a href=\"#\" onClick=\"githubInterface.commit('"+tree.tree[i].url+"', '"+token+"')\" class=\"githubfolderentry githubblob\">";
+        }
+        element += tree.tree[i].path;
+        element += '</a>';
+        output.append(element);
+      }
+    });*/
+//}
+
+/*
 githubInterface.importPad = function (padId, user, repo, commit, file)
 {
 	var pad;
@@ -14,7 +69,7 @@ githubInterface.importPad = function (padId, user, repo, commit, file)
 	function importCommit(apipath, commit, file)
 	{
 		var path = file.split("/");
-		$.getJSON("api.github.com"+apipath+"/commits/"+commit}, function (data)
+		$.getJSON("https://api.github.com"+apipath+"/commits/"+commit}, function (data)
 				{
 					$.getJSON(commitObject.tree.url, function (treeObject)
 							{
@@ -46,7 +101,7 @@ githubInterface.importPad = function (padId, user, repo, commit, file)
 	pad.githubData = {user: user, repo: repo};
 	if(commit == null)
 	{
-		$.getJSON("api.github.com"+apipath+"/refs/heads/master", function (data)
+		$.getJSON("https://api.github.com"+apipath+"/refs/heads/master", function (data)
 				{
 					importCommit(apipath, data.object.sha, file);
 				});
@@ -57,7 +112,7 @@ githubInterface.importPad = function (padId, user, repo, commit, file)
 	}
 }
 
-githubInterface.commitAndPush = function (padId, message, branch, callback, user, repo)
+githubInterface.commit = function (message, branch, repo)
 {
 	if(user == null)
 		user = pad.githubData.user;
@@ -69,9 +124,9 @@ githubInterface.commitAndPush = function (padId, message, branch, callback, user
 		callback({error: "no user given"});
 	var apipath = "/repos/"+user+"/"+repo+"/git";
 	var path = file.split("/");
-	httpsGetJSON("api.github.com"+apipath+"/refs/heads/master"}, function (data)
+	httpsGetJSON("https://api.github.com"+apipath+"/refs/heads/master"}, function (data)
 			{
-				httpsGetJSON({"api.github.com"+apipath+"/commits/"+data.object.sha}, function (commitObject)
+				httpsGetJSON({"https://api.github.com"+apipath+"/commits/"+data.object.sha}, function (commitObject)
 						{
 							httpsGetJSON(commitObject.tree.url, function (treeObject)
 									{
@@ -100,4 +155,4 @@ githubInterface.commitAndPush = function (padId, message, branch, callback, user
 						});
 			}
 }
-
+*/

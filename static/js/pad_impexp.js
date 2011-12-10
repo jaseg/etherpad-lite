@@ -276,6 +276,7 @@ var padimpexp = (function()
       $("#importfileinput").change(fileInputUpdated);
       $('#importform').submit(fileInputSubmit);
       $('.disabledexport').click(cantExport);
+      
     },
     handleFrameCall: function(callName, argsArray)
     {
