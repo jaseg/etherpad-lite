@@ -451,9 +451,10 @@ var pad = {
     if(github_export_token)
     {
       $("#githubexportbox").show();
-      $.getScript("/static/js/GithubInterface.js", function(data, statusMessage){
-          githubInterface.populateGithubFolderView(null, github_export_token);
-        });
+      //FIXME re-add the dynamic loading of the github stuff
+      //$.getScript("/static/js/GithubInterface.js", function(data, statusMessage){
+          githubInterface.populateGithubFolderView(null, null, github_export_token);
+       // });
     }
   },
   dispose: function()

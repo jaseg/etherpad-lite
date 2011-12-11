@@ -1,18 +1,40 @@
 
 var githubInterface = {
-//  parents: Array.new();
+  parents: Array()
 };
 
-githubInterface.populateGithubFolderView = function(location, token){
-  console.log("foo");
-  /*var output = $("#githubfolderview");
+githubInterface.levelUp = function(token){
+  githubInterface.parents.pop();
+  var target = githubInterface.parents[githubInterface.parents.length-1];
+  console.log("going to "+(target ? "target" : null));
+  githubInterface.populateGithubFolderView(null, target ? target.location : null, token, true);
+}
+
+githubInterface.rebuildPathView = function(){
+  $("#githubpathview").html(null);
+  for(i in githubInterface.parents)
+  {
+    var name = githubInterface.parents[i].name;
+    $("#githubpathview").append('<a class="githubpathatom">'+(name?name:'')+'/</a>');
+    console.log("name: "+githubInterface.parents[i].name+" location: "+githubInterface.parents[i].location);
+  }
+}
+
+githubInterface.populateGithubFolderView = function(name, location, token, returning){
+  var output = $("#githubfolderview");
+  if(!returning)
+  {
+    console.log("entering");
+    githubInterface.parents.push({name: name, location: location});
+  }
+  githubInterface.rebuildPathView();
   if(location == null)
   { //list the user's repositories
     $.getJSON("https://api.github.com/user/repos?access_token="+token, function(data){
         output.html(null);
         for(var i in data){
           var element = '';
-          element += "<a href=\"#\" onClick=\"githubInterface.populateGithubFolderView(null, '"+data[i].url+"', '"+token+"')\" class=\"githubfolderentry githubrepo\">";
+          element += "<a href=\"#\" onClick=\"githubInterface.populateGithubFolderView('"+data[i].name+"', '"+data[i].url+"', '"+token+"')\" class=\"githubfolderentry githubrepo\">";
           element += data[i].name;
           element += '</a>';
           output.append(element);
@@ -20,30 +42,36 @@ githubInterface.populateGithubFolderView = function(location, token){
       });
   }
   else
-  {
-    if(githubInterface.parents.size() == 0)
+  { 
+    if(location.indexOf("git/trees") == -1)
     { //list master branch top-level
-      /*$.getJSON(location+"/git/refs/heads/master?access_token="+token, function(ref){
+      $.getJSON(location+"/git/refs/heads/master?access_token="+token, function(ref){
           $.getJSON(ref.object.url, function(commit){
             githubInterface.populateGithubFolderViewWithTree(output, commit.tree.url, token);
           });
         });
-        */
     }
     else
     { //list subfolder
-      //githubInterface.populateGithubFolderViewWithTree(output, location, token);
+      githubInterface.populateGithubFolderViewWithTree(output, location, token);
     }
-  }*/
+  }
 }
 
-//githubInterface.populateGithubFolderViewWithTree = function(output, location, token){
-  /*$.getJSON(location, function(tree){
+githubInterface.populateGithubFolderViewWithTree = function(output, location, token){
+  $.getJSON(location, function(tree){
       output.html(null);
+
+      var back = '';
+      back += "<a href=\"#\" onClick=\"githubInterface.levelUp('"+token+"')\" class=\"githubfolderentry githublevelup\">";
+      back += ".. (one level up)";
+      back += '</a>';
+      output.append(back);
+
       for(var i in tree.tree){
         var element = '';
         if(tree.tree[i].type == "tree"){
-          element += "<a href=\"#\" onClick=\"githubInterface.populateGithubFolderView('"+tree.tree[i].url+"', '"+token+"')\" class=\"githubfolderentry githubtree\">";
+          element += "<a href=\"#\" onClick=\"githubInterface.populateGithubFolderView('"+tree.tree[i].path+"', '"+tree.tree[i].url+"', '"+token+"')\" class=\"githubfolderentry githubtree\">";
         }
         else
         {
@@ -53,8 +81,8 @@ githubInterface.populateGithubFolderView = function(location, token){
         element += '</a>';
         output.append(element);
       }
-    });*/
-//}
+    });
+}
 
 /*
 githubInterface.importPad = function (padId, user, repo, commit, file)

@@ -815,6 +815,13 @@ border-radius: 6px;
   border-bottom: 1px solid;
 }
 
+.githubpathatom {
+  font-size: 12px;
+  font-weight: bold;
+  display: inline;
+  text-decoration: none;
+}
+
 #githubcommitmessage {
   width: 100%;
   height: 200px;
