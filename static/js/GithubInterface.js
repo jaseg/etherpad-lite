@@ -1,6 +1,9 @@
 
 var githubInterface = {
-  parents: Array()
+  parents: Array(),
+  currentBaseTree: null,
+  currentCommit: null,
+  currentRepo: null
 };
 
 githubInterface.levelUp = function(token, level){
@@ -9,7 +12,6 @@ githubInterface.levelUp = function(token, level){
     githubInterface.parents.pop();
   }
   var target = githubInterface.parents[githubInterface.parents.length-1];
-  console.log("going to "+(target ? "target" : null));
   githubInterface.populateGithubFolderView(null, target ? target.location : null, token, true);
 }
 
@@ -19,7 +21,6 @@ githubInterface.rebuildPathView = function(token){
   {
     var name = githubInterface.parents[i].name;
     $("#githubpathview").append("<a href=\"#\" onClick=\"githubInterface.levelUp('"+token+"', "+i+")\" class=\"githubpathatom\">"+(name?name:"")+"/</a>");
-    console.log("name: "+githubInterface.parents[i].name+" location: "+githubInterface.parents[i].location);
   }
 }
 
@@ -27,7 +28,6 @@ githubInterface.populateGithubFolderView = function(name, location, token, retur
   var output = $("#githubfolderview");
   if(!returning)
   {
-    console.log("entering");
     githubInterface.parents.push({name: name, location: location});
   }
   githubInterface.rebuildPathView(token);
@@ -50,6 +50,9 @@ githubInterface.populateGithubFolderView = function(name, location, token, retur
     { //list master branch top-level
       $.getJSON(location+"/git/refs/heads/master?access_token="+token, function(ref){
           $.getJSON(ref.object.url, function(commit){
+            githubInterface.currentRepo = location;
+            githubInterface.currentCommit = commit.sha;
+            githubInterface.currentBaseTree = commit.tree.sha;
             githubInterface.populateGithubFolderViewWithTree(output, commit.tree.url, token);
           });
         });
@@ -78,12 +81,34 @@ githubInterface.populateGithubFolderViewWithTree = function(output, location, to
         }
         else
         {
-          element += "<a href=\"#\" onClick=\"githubInterface.commit('"+tree.tree[i].url+"', '"+token+"')\" class=\"githubfolderentry githubblob\">";
+          element += "<a href=\"#\" onClick=\"githubInterface.commit('"+tree.tree[i].path+"', '"+token+"')\" class=\"githubfolderentry githubblob\">";
         }
         element += tree.tree[i].path;
         element += '</a>';
         output.append(element);
       }
+    });
+}
+
+githubInterface.commit = function(filename, token){
+  var fullPath = $("#githubpathview").text().replace(/\/[^\/]*/, "")+filename;
+  $.post(githubInterface.currentRepo+"/git/trees?access_token="+token, {
+      base_tree: githubInterface.currentBaseTree,
+      tree: {
+        path: fullPath,
+        content: padeditor.ace.exportText()
+      }
+    }, function(data){
+      $.post(githubInterface.currentRepo+"/git/commits?access_token="+token, {
+          parents: [githubInterface.currentCommit],
+          tree: data.sha
+        }, function(data){
+          $.post(githubInterface.currentRepo+"/git/refs/head/master?access_token="+token, {
+              sha: data.sha
+            }, function(data){
+              //finished
+            });
+        });
     });
 }
 
@@ -141,49 +166,5 @@ githubInterface.importPad = function (padId, user, repo, commit, file)
 	{
 		importCommit(apipath, commit, file);
 	}
-}
-
-githubInterface.commit = function (message, branch, repo)
-{
-	if(user == null)
-		user = pad.githubData.user;
-	if(user == null)
-		callback({error: "no user given"});
-	if(repo == null)
-		repo = pad.githubData.repo;
-	if(repo == null)
-		callback({error: "no user given"});
-	var apipath = "/repos/"+user+"/"+repo+"/git";
-	var path = file.split("/");
-	httpsGetJSON("https://api.github.com"+apipath+"/refs/heads/master"}, function (data)
-			{
-				httpsGetJSON({"https://api.github.com"+apipath+"/commits/"+data.object.sha}, function (commitObject)
-						{
-							httpsGetJSON(commitObject.tree.url, function (treeObject)
-									{
-										var currentElement;
-										//get bottommost non-empty element
-										while (!(currentElement = path.shift()));
-										for (leaf in treeObject.tree)
-										{
-											if(leaf.path === currentElement)
-											{
-												if(path.length() > 0){
-													httpsGetJSON(leaf.url, traversePath(treeObject, path));
-												}
-												else
-												{
-													//reached the file.
-													httpsGetJSON(leaf.url, function (blob)
-															{
-																pad.setText(blob.content);
-																padMessageHandler.updatePadClients(pad, callback);
-															});
-												}
-											}
-										}						
-									});
-						});
-			}
 }
 */
