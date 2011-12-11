@@ -3,19 +3,22 @@ var githubInterface = {
   parents: Array()
 };
 
-githubInterface.levelUp = function(token){
-  githubInterface.parents.pop();
+githubInterface.levelUp = function(token, level){
+  for(var i=0; i<(level?(githubInterface.parents.length-level):1); i++)
+  {
+    githubInterface.parents.pop();
+  }
   var target = githubInterface.parents[githubInterface.parents.length-1];
   console.log("going to "+(target ? "target" : null));
   githubInterface.populateGithubFolderView(null, target ? target.location : null, token, true);
 }
 
-githubInterface.rebuildPathView = function(){
+githubInterface.rebuildPathView = function(token){
   $("#githubpathview").html(null);
   for(i in githubInterface.parents)
   {
     var name = githubInterface.parents[i].name;
-    $("#githubpathview").append('<a class="githubpathatom">'+(name?name:'')+'/</a>');
+    $("#githubpathview").append("<a href=\"#\" onClick=\"githubInterface.levelUp('"+token+"', "+i+")\" class=\"githubpathatom\">"+(name?name:"")+"/</a>");
     console.log("name: "+githubInterface.parents[i].name+" location: "+githubInterface.parents[i].location);
   }
 }
@@ -27,7 +30,7 @@ githubInterface.populateGithubFolderView = function(name, location, token, retur
     console.log("entering");
     githubInterface.parents.push({name: name, location: location});
   }
-  githubInterface.rebuildPathView();
+  githubInterface.rebuildPathView(token);
   if(location == null)
   { //list the user's repositories
     $.getJSON("https://api.github.com/user/repos?access_token="+token, function(data){

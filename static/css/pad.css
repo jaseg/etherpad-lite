@@ -820,6 +820,7 @@ border-radius: 6px;
   font-weight: bold;
   display: inline;
   text-decoration: none;
+  color: white;
 }
 
 #githubcommitmessage {
