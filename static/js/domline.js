@@ -1,3 +1,9 @@
+/**
+ * This code is mostly from the old Etherpad. Please help us to comment this code. 
+ * This helps other people to understand this code better and helps them to improve it.
+ * TL;DR COMMENTS ON THIS FILE ARE HIGHLY APPRECIATED
+ */
+
 // THIS FILE IS ALSO AN APPJET MODULE: etherpad.collab.ace.domline
 // %APPJET%: import("etherpad.admin.plugins");
 /**
@@ -152,6 +158,10 @@ domline.createDomLine = function(nonEmpty, doesWrap, optBrowser, optDocument)
     {
       if (href)
       {
+        if(!~href.indexOf("http")) // if the url doesn't include http or https etc prefix it.
+        {
+          href = "http://"+href;
+        }
         extraOpenTags = extraOpenTags + '<a href="' + href.replace(/\"/g, '&quot;') + '">';
         extraCloseTags = '</a>' + extraCloseTags;
       }

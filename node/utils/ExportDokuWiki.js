@@ -1,5 +1,5 @@
 /**
- * Copyright 2009 Google Inc.
+ * Copyright 2011 Adrian Lang
  * 
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,38 +17,11 @@
 var async = require("async");
 var Changeset = require("./Changeset");
 var padManager = require("../db/PadManager");
-var ERR = require("async-stacktrace");
 
-function getPadPlainText(pad, revNum)
-{
-  var atext = ((revNum !== undefined) ? pad.getInternalRevisionAText(revNum) : pad.atext());
-  var textLines = atext.text.slice(0, -1).split('\n');
-  var attribLines = Changeset.splitAttributionLines(atext.attribs, atext.text);
-  var apool = pad.pool();
-
-  var pieces = [];
-  for (var i = 0; i < textLines.length; i++)
-  {
-    var line = _analyzeLine(textLines[i], attribLines[i], apool);
-    if (line.listLevel)
-    {
-      var numSpaces = line.listLevel * 2 - 1;
-      var bullet = '*';
-      pieces.push(new Array(numSpaces + 1).join(' '), bullet, ' ', line.text, '\n');
-    }
-    else
-    {
-      pieces.push(line.text, '\n');
-    }
-  }
-
-  return pieces.join('');
-}
-
-function getPadHTML(pad, revNum, callback)
+function getPadDokuWiki(pad, revNum, callback)
 {
   var atext = pad.atext;
-  var html;
+  var dokuwiki;
   async.waterfall([
   // fetch revision atext
 
@@ -59,9 +32,8 @@ function getPadHTML(pad, revNum, callback)
     {
       pad.getInternalRevisionAText(revNum, function (err, revisionAtext)
       {
-        if(ERR(err, callback)) return;
         atext = revisionAtext;
-        callback();
+        callback(err);
       });
     }
     else
@@ -70,12 +42,11 @@ function getPadHTML(pad, revNum, callback)
     }
   },
 
-  // convert atext to html
-
+  // convert atext to dokuwiki text
 
   function (callback)
   {
-    html = getHTMLFromAtext(pad, atext);
+    dokuwiki = getDokuWikiFromAtext(pad, atext);
     callback(null);
   }],
   // run final callback
@@ -83,20 +54,17 @@ function getPadHTML(pad, revNum, callback)
 
   function (err)
   {
-    if(ERR(err, callback)) return;
-    callback(null, html);
+    callback(err, dokuwiki);
   });
 }
 
-exports.getPadHTML = getPadHTML;
-
-function getHTMLFromAtext(pad, atext)
+function getDokuWikiFromAtext(pad, atext)
 {
   var apool = pad.apool();
   var textLines = atext.text.slice(0, -1).split('\n');
   var attribLines = Changeset.splitAttributionLines(atext.attribs, atext.text);
 
-  var tags = ['h1', 'h2', 'strong', 'em', 'u', 's'];
+  var tags = ['======', '=====', '**', '//', '__', 'del>'];
   var props = ['heading1', 'heading2', 'bold', 'italic', 'underline', 'strikethrough'];
   var anumMap = {};
 
@@ -109,7 +77,7 @@ function getHTMLFromAtext(pad, atext)
     }
   });
 
-  function getLineHTML(text, attribs)
+  function getLineDokuWiki(text, attribs)
   {
     var propVals = [false, false, false];
     var ENTER = 1;
@@ -124,37 +92,20 @@ function getHTMLFromAtext(pad, atext)
     var taker = Changeset.stringIterator(text);
     var assem = Changeset.stringAssembler();
 
-    var openTags = [];
     function emitOpenTag(i)
     {
-      openTags.unshift(i);
-      assem.append('<');
+      if (tags[i].indexOf('>') !== -1) {
+        assem.append('<');
+      }
       assem.append(tags[i]);
-      assem.append('>');
     }
 
     function emitCloseTag(i)
     {
-      openTags.shift();
-      assem.append('</');
-      assem.append(tags[i]);
-      assem.append('>');
-    }
-    
-    function orderdCloseTags(tags2close)
-    {
-      for(var i=0;i<openTags.length;i++)
-      {
-        for(var j=0;j<tags2close.length;j++)
-        {
-          if(tags2close[j] == openTags[i])
-          {
-            emitCloseTag(tags2close[j]);
-            i--;
-            break;
-          }
-        }
+      if (tags[i].indexOf('>') !== -1) {
+        assem.append('</');
       }
+      assem.append(tags[i]);
     }
 
     var urls = _findURLs(text);
@@ -228,25 +179,18 @@ function getHTMLFromAtext(pad, atext)
             }
           }
 
-          var tags2close = [];
-
           for (var i = propVals.length - 1; i >= 0; i--)
           {
             if (propVals[i] === LEAVE)
             {
-              //emitCloseTag(i);
-              tags2close.push(i);
+              emitCloseTag(i);
               propVals[i] = false;
             }
             else if (propVals[i] === STAY)
             {
-              //emitCloseTag(i);
-              tags2close.push(i);
+              emitCloseTag(i);
             }
           }
-          
-          orderdCloseTags(tags2close);
-          
           for (var i = 0; i < propVals.length; i++)
           {
             if (propVals[i] === ENTER || propVals[i] === STAY)
@@ -262,27 +206,18 @@ function getHTMLFromAtext(pad, atext)
         {
           chars--; // exclude newline at end of line, if present
         }
-        
         var s = taker.take(chars);
-        
-        //removes the characters with the code 12. Don't know where they come 
-        //from but they break the abiword parser and are completly useless
-        s = s.replace(String.fromCharCode(12), "");
-        
-        assem.append(_escapeHTML(s));
+
+        assem.append(_escapeDokuWiki(s));
       } // end iteration over spans in line
-      
-      var tags2close = [];
       for (var i = propVals.length - 1; i >= 0; i--)
       {
         if (propVals[i])
         {
-          tags2close.push(i);
+          emitCloseTag(i);
           propVals[i] = false;
         }
       }
-      
-      orderdCloseTags(tags2close);
     } // end processNextChars
     if (urls)
     {
@@ -292,80 +227,34 @@ function getHTMLFromAtext(pad, atext)
         var url = urlData[1];
         var urlLength = url.length;
         processNextChars(startIndex - idx);
-        assem.append('<a href="' + url.replace(/\"/g, '&quot;') + '">');
-        processNextChars(urlLength);
-        assem.append('</a>');
+        assem.append('[[');
+
+        // Do not use processNextChars since a link does not contain syntax and
+        // needs no escaping
+        var iter = Changeset.opIterator(Changeset.subattribution(attribs, idx, idx + urlLength));
+        idx += urlLength;
+        assem.append(taker.take(iter.next().chars));
+
+        assem.append(']]');
       });
     }
     processNextChars(text.length - idx);
 
-    return _processSpaces(assem.toString());
-  } // end getLineHTML
+    return assem.toString() + "\n";
+  } // end getLineDokuWiki
   var pieces = [];
 
-  // Need to deal with constraints imposed on HTML lists; can
-  // only gain one level of nesting at once, can't change type
-  // mid-list, etc.
-  // People might use weird indenting, e.g. skip a level,
-  // so we want to do something reasonable there.  We also
-  // want to deal gracefully with blank lines.
-  var lists = []; // e.g. [[1,'bullet'], [3,'bullet'], ...]
   for (var i = 0; i < textLines.length; i++)
   {
     var line = _analyzeLine(textLines[i], attribLines[i], apool);
-    var lineContent = getLineHTML(line.text, line.aline);
+    var lineContent = getLineDokuWiki(line.text, line.aline);
 
-    if (line.listLevel || lists.length > 0)
+    if (line.listLevel && lineContent)
     {
-      // do list stuff
-      var whichList = -1; // index into lists or -1
-      if (line.listLevel)
-      {
-        whichList = lists.length;
-        for (var j = lists.length - 1; j >= 0; j--)
-        {
-          if (line.listLevel <= lists[j][0])
-          {
-            whichList = j;
-          }
-        }
-      }
-
-      if (whichList >= lists.length)
-      {
-        lists.push([line.listLevel, line.listTypeName]);
-        pieces.push('<ul><li>', lineContent || '<br>');
-      }
-      else if (whichList == -1)
-      {
-        if (line.text)
-        {
-          // non-blank line, end all lists
-          pieces.push(new Array(lists.length + 1).join('</li></ul\n>'));
-          lists.length = 0;
-          pieces.push(lineContent, '<br>');
-        }
-        else
-        {
-          pieces.push('<br><br>');
-        }
-      }
-      else
-      {
-        while (whichList < lists.length - 1)
-        {
-          pieces.push('</li></ul>');
-          lists.length--;
-        }
-        pieces.push('</li><li>', lineContent || '<br>');
-      }
+      pieces.push(new Array(line.listLevel + 1).join('  ') + '* ');
     }
-    else
-    {
-      pieces.push(lineContent, '<br>');
-    }
+    pieces.push(lineContent);
   }
-  pieces.push(new Array(lists.length + 1).join('</li></ul>'));
 
   return pieces.join('');
 }
@@ -409,114 +298,25 @@ function _analyzeLine(text, aline, apool)
   return line;
 }
 
-exports.getPadHTMLDocument = function (padId, revNum, noDocType, callback)
+exports.getPadDokuWikiDocument = function (padId, revNum, callback)
 {
   padManager.getPad(padId, function (err, pad)
   {
-    if(ERR(err, callback)) return;
-
-    var head = (noDocType ? '' : '<!doctype html>\n') + '<html lang="en">\n' + (noDocType ? '' : '<head>\n' + '<meta charset="utf-8">\n' + '<style> * { font-family: arial, sans-serif;\n' + 'font-size: 13px;\n' + 'line-height: 17px; }</style>\n' + '</head>\n') + '<body>';
-
-    var foot = '</body>\n</html>\n';
-
-    getPadHTML(pad, revNum, function (err, html)
+    if (err)
     {
-      if(ERR(err, callback)) return;
-      callback(null, head + html + foot);
-    });
+      callback(err);
+      return;
+    }
+
+    getPadDokuWiki(pad, revNum, callback);
   });
 }
 
-function _escapeHTML(s)
+function _escapeDokuWiki(s)
 {
-  var re = /[&<>]/g;
-  if (!re.MAP)
-  {
-    // persisted across function calls!
-    re.MAP = {
-      '&': '&amp;',
-      '<': '&lt;',
-      '>': '&gt;',
-    };
-  }
-  
-  s = s.replace(re, function (c)
-  {
-    return re.MAP[c];
-  });
-  
-  return s.replace(/[^\x21-\x7E\s\t\n\r]/g, function(c)
-  {
-    return "&#" +c.charCodeAt(0) + ";"
-  });
+  s = s.replace(/(\/\/|\*\*|__)/g, '%%$1%%');
+  return s;
 }
-
-// copied from ACE
-
-
-function _processSpaces(s)
-{
-  var doesWrap = true;
-  if (s.indexOf("<") < 0 && !doesWrap)
-  {
-    // short-cut
-    return s.replace(/ /g, '&nbsp;');
-  }
-  var parts = [];
-  s.replace(/<[^>]*>?| |[^ <]+/g, function (m)
-  {
-    parts.push(m);
-  });
-  if (doesWrap)
-  {
-    var endOfLine = true;
-    var beforeSpace = false;
-    // last space in a run is normal, others are nbsp,
-    // end of line is nbsp
-    for (var i = parts.length - 1; i >= 0; i--)
-    {
-      var p = parts[i];
-      if (p == " ")
-      {
-        if (endOfLine || beforeSpace) parts[i] = '&nbsp;';
-        endOfLine = false;
-        beforeSpace = true;
-      }
-      else if (p.charAt(0) != "<")
-      {
-        endOfLine = false;
-        beforeSpace = false;
-      }
-    }
-    // beginning of line is nbsp
-    for (var i = 0; i < parts.length; i++)
-    {
-      var p = parts[i];
-      if (p == " ")
-      {
-        parts[i] = '&nbsp;';
-        break;
-      }
-      else if (p.charAt(0) != "<")
-      {
-        break;
-      }
-    }
-  }
-  else
-  {
-    for (var i = 0; i < parts.length; i++)
-    {
-      var p = parts[i];
-      if (p == " ")
-      {
-        parts[i] = '&nbsp;';
-      }
-    }
-  }
-  return parts.join('');
-}
-
 
 // copied from ACE
 var _REGEX_WORDCHAR = /[\u0030-\u0039\u0041-\u005A\u0061-\u007A\u00C0-\u00D6\u00D8-\u00F6\u00F8-\u00FF\u0100-\u1FFF\u3040-\u9FFF\uF900-\uFDFF\uFE70-\uFEFE\uFF10-\uFF19\uFF21-\uFF3A\uFF41-\uFF5A\uFF66-\uFFDC]/;

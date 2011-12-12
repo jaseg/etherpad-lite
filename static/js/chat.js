@@ -1,4 +1,10 @@
 /**
+ * This code is mostly from the old Etherpad. Please help us to comment this code. 
+ * This helps other people to understand this code better and helps them to improve it.
+ * TL;DR COMMENTS ON THIS FILE ARE HIGHLY APPRECIATED
+ */
+
+/**
  * Copyright 2009 Google Inc., 2011 Peter 'Pita' Martischka (Primary Technology Ltd)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -16,19 +22,33 @@
 
 var chat = (function()
 {
+  var ua = navigator.userAgent.toLowerCase();
+  var isAndroid = ua.indexOf("android") > -1;
+  var isMobileSafari = ua.indexOf("mobile") > -1;
+  var bottomMargin = "0px";
+  var sDuration = 500;
+  var hDuration = 750;
+  var chatMentions = 0;
+  var title = document.title;
+  if (isAndroid || isMobileSafari){
+   sDuration = 0;
+   hDuration = 0;
+  }
   var self = {
     show: function () 
     {      
       $("#chaticon").hide("slide", {
         direction: "down"
-      }, 500, function ()
+      }, hDuration, function ()
       {
         $("#chatbox").show("slide", {
           direction: "down"
-        }, 750, self.scrollDown);
+        }, sDuration, self.scrollDown);
         $("#chatbox").resizable(
         {
           handles: 'nw',
+          minHeight: 40,
+          minWidth: 80,
           start: function (event, ui)
           {
             $("#focusprotector").show();
@@ -37,25 +57,28 @@ var chat = (function()
           {
             $("#focusprotector").hide();
             
-            $("#chatbox").css({right: "20px", bottom: "0px", left: "", top: ""});
+            if(isAndroid || isMobileSafari)
+              bottommargin = "32px";
+            
+            $("#chatbox").css({right: "20px", bottom: bottomMargin, left: "", top: ""});
             
             self.scrollDown();
           }
         });
       });
+      chatMentions = 0;
+      document.title = title;
     },
     hide: function () 
     {
       $("#chatcounter").text("0");
-      $("#chatbox").hide("slide", { direction: "down" }, 750, function()
+      $("#chatbox").hide("slide", { direction: "down" }, sDuration, function()
       {
-        $("#chaticon").show("slide", { direction: "down" }, 500);
+        $("#chaticon").show("slide", { direction: "down" }, hDuration);
       });
     },
     scrollDown: function()
     {
-      //console.log($('#chatbox').css("display"));
-    
       if($('#chatbox').css("display") != "none")
         $('#chattext').animate({scrollTop: $('#chattext')[0].scrollHeight}, "slow");
     }, 
@@ -87,6 +110,17 @@ var chat = (function()
       });
 
       var text = padutils.escapeHtmlWithClickableLinks(padutils.escapeHtml(msg.text), "_blank");
+
+      /* Performs an action if your name is mentioned */
+      var myName = $('#myusernameedit').val();
+      myName = myName.toLowerCase();
+      var chatText = text.toLowerCase();
+      var wasMentioned = false;
+      if (chatText.indexOf(myName) !== -1 && myName != "undefined"){
+        wasMentioned = true;
+      }
+      /* End of new action */
+
       var authorName = msg.userName == null ? "unnamed" : padutils.escapeHtml(msg.userName); 
       
       var html = "<p class='" + authorClass + "'><b>" + authorName + ":</b><span class='time'>" + timeStr + "</span> " + text + "</p>";
@@ -98,9 +132,22 @@ var chat = (function()
         var count = Number($("#chatcounter").text());
         count++;
         $("#chatcounter").text(count);
-        // chat throb stuff -- Just make it throb in for ~2 secs then fadeotu
-        $('#chatthrob').html("<b>"+authorName+"</b>" + ": " + text);
-        $('#chatthrob').effect("pulsate", {times:1,mode:"hide"},2000);
+        // chat throb stuff -- Just make it throw for twice as long
+        if(wasMentioned)
+        { // If the user was mentioned show for twice as long and flash the browser window
+          if (chatMentions == 0){
+            title = document.title;
+          }
+          $('#chatthrob').html("<b>"+authorName+"</b>" + ": " + text);
+          $('#chatthrob').effect("pulsate", {times:1,mode:"hide"},4000);
+          chatMentions++;
+          document.title = "("+chatMentions+") " + title;
+        }
+        else
+        {
+          $('#chatthrob').html("<b>"+authorName+"</b>" + ": " + text);
+          $('#chatthrob').effect("pulsate", {times:1,mode:"hide"},2000);
+        }
       }
       
       self.scrollDown();

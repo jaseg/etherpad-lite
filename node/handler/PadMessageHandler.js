@@ -18,6 +18,7 @@
  * limitations under the License.
  */
 
+var ERR = require("async-stacktrace");
 var async = require("async");
 var padManager = require("../db/PadManager");
 var Changeset = require("../utils/Changeset");
@@ -107,7 +108,7 @@ exports.handleDisconnect = function(client)
     //get the author color out of the db
     authorManager.getAuthorColorId(author, function(err, color)
     {
-      if(err) throw err;
+      ERR(err);
       
       //prepare the notification for the other users on the pad, that this user left
       var messageToTheOtherUsers = {
@@ -136,7 +137,7 @@ exports.handleDisconnect = function(client)
   {
     if(pad2sessions[sessionPad][i] == client.id)
     {
-      delete pad2sessions[sessionPad][i];  
+      pad2sessions[sessionPad].splice(i, 1); 
       break;
     }
   }
@@ -196,10 +197,10 @@ exports.handleMessage = function(client, message)
   {
     handleSetPadPassword(client, message);
   }
-  //if the message type is unkown, throw an exception
+  //if the message type is unknown, throw an exception
   else
   {
-    messageLogger.warn("Dropped message, unkown Message Type " + message.type);
+    messageLogger.warn("Dropped message, unknown Message Type " + message.type);
   }
 }
 
@@ -224,16 +225,18 @@ function handleChatMessage(client, message)
     {
       padManager.getPad(padId, function(err, _pad)
       {
+        if(ERR(err, callback)) return;
         pad = _pad;
-        callback(err);
+        callback();
       });
     },
     function(callback)
     {
       authorManager.getAuthorName(userId, function(err, _userName)
       {
+        if(ERR(err, callback)) return;
         userName = _userName;
-        callback(err);
+        callback();
       });
     },
     //save the chat message and broadcast it
@@ -263,7 +266,7 @@ function handleChatMessage(client, message)
     }
   ], function(err)
   {
-    if(err) throw err;
+    ERR(err);
   });
 }
 
@@ -388,8 +391,9 @@ function handleUserChanges(client, message)
     {
       padManager.getPad(session2pad[client.id], function(err, value)
       {
+        if(ERR(err, callback)) return;
         pad = value;
-        callback(err);
+        callback();
       });
     },
     //create the changeset
@@ -435,16 +439,10 @@ function handleUserChanges(client, message)
             
           pad.getRevisionChangeset(r, function(err, c)
           {
-            if(err)
-            {
-              callback(err);
-              return;
-            } 
-            else
-            {
-              changeset = Changeset.follow(c, changeset, false, apool);
-              callback(null);
-            }
+            if(ERR(err, callback)) return;
+            
+            changeset = Changeset.follow(c, changeset, false, apool);
+            callback(null);
           });
         },
         //use the callback of the series function
@@ -482,7 +480,7 @@ function handleUserChanges(client, message)
     }
   ], function(err)
   {
-    if(err) throw err;
+    ERR(err);
   });
 }
 
@@ -515,25 +513,23 @@ exports.updatePadClients = function(pad, callback)
           {
             pad.getRevisionAuthor(r, function(err, value)
             {
+              if(ERR(err, callback)) return;
               author = value;
-              callback(err);
+              callback();
             });
           },
           function (callback)
           {
             pad.getRevisionChangeset(r, function(err, value)
             {
+              if(ERR(err, callback)) return;
               revChangeset = value;
-              callback(err);
+              callback();
             });
           }
         ], function(err)
         {
-          if(err)
-          {
-            callback(err);
-            return;
-          }
+          if(ERR(err, callback)) return;
             
           if(author == sessioninfos[session].author)
           {
@@ -613,22 +609,22 @@ function handleClientReady(client, message)
   //check if all ok
   if(!message.token)
   {
-    messageLogger.warn("Dropped message, CLIENT_READY message has no token!");
+    messageLogger.warn("Dropped message, CLIENT_READY Message has no token!");
     return;
   }
   if(!message.padId)
   {
-    messageLogger.warn("Dropped message, CLIENT_READY message has no padId!");
+    messageLogger.warn("Dropped message, CLIENT_READY Message has no padId!");
     return;
   }
   if(!message.protocolVersion)
   {
-    messageLogger.warn("Dropped message, CLIENT_READY message has no protocolVersion!");
+    messageLogger.warn("Dropped message, CLIENT_READY Message has no protocolVersion!");
     return;
   }
   if(message.protocolVersion != 2)
   {
-    messageLogger.warn("Dropped message, CLIENT_READY message has an unkown protocolVersion '" + message.protocolVersion + "'!");
+    messageLogger.warn("Dropped message, CLIENT_READY Message has a unknown protocolVersion '" + message.protocolVersion + "'!");
     return;
   }
 
@@ -646,7 +642,7 @@ function handleClientReady(client, message)
     {
       securityManager.checkAccess (message.padId, message.sessionID, message.token, message.password, function(err, statusObject)
       {
-        if(err) {callback(err); return}
+        if(ERR(err, callback)) return;
         
         //access was granted
         if(statusObject.accessStatus == "grant")
@@ -670,8 +666,9 @@ function handleClientReady(client, message)
         {
           authorManager.getAuthorColorId(author, function(err, value)
           {
+            if(ERR(err, callback)) return;
             authorColorId = value;
-            callback(err);
+            callback();
           });
         },
         //get author name
@@ -679,24 +676,27 @@ function handleClientReady(client, message)
         {
           authorManager.getAuthorName(author, function(err, value)
           {
+            if(ERR(err, callback)) return;
             authorName = value;
-            callback(err);
+            callback();
           });
         },
         function(callback)
         {
           padManager.getPad(message.padId, function(err, value)
           {
+            if(ERR(err, callback)) return;
             pad = value;
-            callback(err);
+            callback();
           });
         },
         function(callback)
         {
           readOnlyManager.getReadOnlyId(message.padId, function(err, value)
           {
+            if(ERR(err, callback)) return;
             readOnlyId = value;
-            callback(err);
+            callback();
           });
         }
       ], callback);
@@ -714,9 +714,10 @@ function handleClientReady(client, message)
           {
             authorManager.getAuthor(authorId, function(err, author)
             {
+              if(ERR(err, callback)) return;
               delete author.timestamp;
               historicalAuthorData[authorId] = author;
-              callback(err);
+              callback();
             });
           }, callback);
         },
@@ -725,8 +726,9 @@ function handleClientReady(client, message)
         {
           pad.getLastChatMessages(100, function(err, _chatMessages)
           {
+            if(ERR(err, callback)) return;
             chatMessages = _chatMessages;
-            callback(err);
+            callback();
           });
         }
       ], callback);
@@ -819,18 +821,27 @@ function handleClientReady(client, message)
         clientVars.userName = authorName;
       }
       
-      //Send the clientVars to the Client
-      client.json.send(clientVars);
-      
-      //sometimes the client disconnects very early and the session of it is already removed
-      //thats why we have to check that case
       if(sessioninfos[client.id] !== undefined)
       {
+        //This is a reconnect, so we don't have to send the client the ClientVars again
+        if(message.reconnect == true)
+        {
+          //Save the revision in sessioninfos, we take the revision from the info the client send to us
+          sessioninfos[client.id].rev = message.client_rev;
+        }
+        //This is a normal first connect
+        else
+        {
+          //Send the clientVars to the Client
+          client.json.send(clientVars);
+          //Save the revision in sessioninfos
+          sessioninfos[client.id].rev = pad.getHeadRevisionNumber();
+        }
+        
         //Save the revision and the author id in sessioninfos
-        sessioninfos[client.id].rev = pad.getHeadRevisionNumber();
         sessioninfos[client.id].author = author;
       }
-
+      
       //prepare the notification for the other users on the pad, that this user joined
       var messageToTheOtherUsers = {
         "type": "COLLABROOM",
@@ -865,16 +876,18 @@ function handleClientReady(client, message)
               {
                 authorManager.getAuthorColorId(sessioninfos[sessionID].author, function(err, value)
                 {
+                  if(ERR(err, callback)) return;
                   sessionAuthorColorId = value;
-                  callback(err);
+                  callback();
                 })
               },
               function(callback)
               {
                 authorManager.getAuthorName(sessioninfos[sessionID].author, function(err, value)
                 {
+                  if(ERR(err, callback)) return;
                   sessionAuthorName = value;
-                  callback(err);
+                  callback();
                 })
               }
             ],callback);
@@ -909,6 +922,6 @@ function handleClientReady(client, message)
     }
   ],function(err)
   {
-    if(err) throw err;
+    ERR(err);
   });
 }

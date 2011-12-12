@@ -18,6 +18,7 @@
  * limitations under the License.
  */
 
+var ERR = require("async-stacktrace");
 var fs = require("fs");
 var api = require("../db/API");
 
@@ -50,6 +51,8 @@ var functions = {
   "listSessionsOfAuthor"      : ["authorID"], 
   "getText"                   : ["padID", "rev"],
   "setText"                   : ["padID", "text"],
+  "getHTML"                   : ["padID", "rev"],
+  "setHTML"                   : ["padID", "html"],
   "getRevisionsCount"         : ["padID"], 
   "deletePad"                 : ["padID"], 
   "getReadOnlyID"             : ["padID"],
@@ -69,7 +72,7 @@ var functions = {
 exports.handle = function(functionName, fields, req, res)
 {
   //check the api key!
-  if(fields["apikey"] != apikey)
+  if(fields["apikey"] != apikey.trim())
   {
     res.send({code: 4, message: "no or wrong API Key", data: null});
     return;
@@ -112,15 +115,15 @@ exports.handle = function(functionName, fields, req, res)
       res.send({code: 0, message: "ok", data: data});
     }
     // parameters were wrong and the api stopped execution, pass the error
-    else if(err.stop)
+    else if(err.name == "apierror")
     {
-      res.send({code: 1, message: err.stop, data: null});
+      res.send({code: 1, message: err.message, data: null});
     }
     //an unkown error happend
     else
     {
       res.send({code: 2, message: "internal error", data: null});
-      throw (err);
+      ERR(err);
     }
   });
   

@@ -20,6 +20,7 @@
  * limitations under the License.
  */
 
+var ERR = require("async-stacktrace");
 var log4js = require('log4js');
 var os = require("os");
 var socketio = require('socket.io');
@@ -91,8 +92,20 @@ async.waterfall([
     var httpLogger = log4js.getLogger("http");
     app.configure(function() 
     {
-      app.use(log4js.connectLogger(httpLogger, { level: log4js.levels.INFO, format: ':status, :method :url'}));
+      // Activate http basic auth if it has been defined in settings.json
+      if(settings.httpAuth != null) app.use(basic_auth);
+
+      // If the log level specified in the config file is WARN or ERROR the application server never starts listening to requests as reported in issue #158.
+      // Not installing the log4js connect logger when the log level has a higher severity than INFO since it would not log at that level anyway.
+      if (!(settings.loglevel === "WARN" || settings.loglevel == "ERROR"))
+        app.use(log4js.connectLogger(httpLogger, { level: log4js.levels.INFO, format: ':status, :method :url'}));
       app.use(express.cookieParser());
+    });
+    
+    app.error(function(err, req, res, next){
+      res.send(500);
+      console.error(err.stack ? err.stack : err.toString());
+      gracefulShutdown();
     });
     
     //serve static files
@@ -126,7 +139,7 @@ async.waterfall([
     {
       securityManager.checkAccess(req.params.pad, req.cookies.sessionid, req.cookies.token, req.cookies.password, function(err, accessObj)
       {
-        if(err) throw err;
+        if(ERR(err, callback)) return;
         
         //there is access, continue
         if(accessObj.accessStatus == "grant")
@@ -139,6 +152,26 @@ async.waterfall([
           res.send("403 - Can't touch this", 403);
         }
       });
+    }
+
+    //checks for basic http auth
+    function basic_auth (req, res, next) {
+      if (req.headers.authorization && req.headers.authorization.search('Basic ') === 0) {
+        // fetch login and password
+        if (new Buffer(req.headers.authorization.split(' ')[1], 'base64').toString() == settings.httpAuth) {
+          next();
+          return;
+        }
+      }
+      
+      res.header('WWW-Authenticate', 'Basic realm="Protected Area"');
+      if (req.headers.authorization) {
+        setTimeout(function () {
+          res.send('Authentication required', 401);
+        }, 1000);
+      } else {
+        res.send('Authentication required', 401);
+      }
     }
     
     //serve read only pad
@@ -156,12 +189,14 @@ async.waterfall([
         {
           readOnlyManager.getPadId(req.params.id, function(err, _padId)
           {
+            if(ERR(err, callback)) return;
+            
             padId = _padId;
             
             //we need that to tell hasPadAcess about the pad  
             req.params.pad = padId; 
             
-            callback(err);
+            callback();
           });
         },
         //render the html document
@@ -179,8 +214,9 @@ async.waterfall([
             //render the html document
             exporthtml.getPadHTMLDocument(padId, null, false, function(err, _html)
             {
+              if(ERR(err, callback)) return;
               html = _html;
-              callback(err);
+              callback();
             });
           });
         }
@@ -188,7 +224,7 @@ async.waterfall([
       {
         //throw any unexpected error
         if(err && err != "notfound")
-          throw err;
+          ERR(err);
           
         if(err == "notfound")
           res.send('404 - Not Found', 404);
@@ -237,7 +273,7 @@ async.waterfall([
         return;
       }
     
-      var types = ["pdf", "doc", "txt", "html", "odt"];
+      var types = ["pdf", "doc", "txt", "html", "odt", "dokuwiki"];
       //send a 404 if we don't support this filetype
       if(types.indexOf(req.params.type) == -1)
       {
@@ -246,7 +282,8 @@ async.waterfall([
       }
       
       //if abiword is disabled, and this is a format we only support with abiword, output a message
-      if(settings.abiword == null && req.params.type != "html" && req.params.type != "txt" )
+      if(settings.abiword == null &&
+         ["odt", "pdf", "doc"].indexOf(req.params.type) !== -1)
       {
         res.send("Abiword is not enabled at this Etherpad Lite instance. Set the path to Abiword in settings.json to enable this feature");
         return;
@@ -287,14 +324,13 @@ async.waterfall([
     });
     
     var apiLogger = log4js.getLogger("API");
-    
-    //This is a api call, collect all post informations and pass it to the apiHandler
-    app.get('/api/1/:func', function(req, res)
-    {
+
+    //This is for making an api call, collecting all post information and passing it to the apiHandler
+    var apiCaller = function(req, res, fields) {
       res.header("Server", serverName);
       res.header("Content-Type", "application/json; charset=utf-8");
     
-      apiLogger.info("REQUEST, " + req.params.func + ", " + JSON.stringify(req.query));
+      apiLogger.info("REQUEST, " + req.params.func + ", " + JSON.stringify(fields));
       
       //wrap the send function so we can log the response
       res._send = res.send;
@@ -311,7 +347,22 @@ async.waterfall([
       }
       
       //call the api handler
-      apiHandler.handle(req.params.func, req.query, req, res);
+      apiHandler.handle(req.params.func, fields, req, res);
+    }
+    
+    //This is a api GET call, collect all post informations and pass it to the apiHandler
+    app.get('/api/1/:func', function(req, res)
+    {
+      apiCaller(req, res, req.query)
+    });
+
+    //This is a api POST call, collect all post informations and pass it to the apiHandler
+    app.post('/api/1/:func', function(req, res)
+    {
+      new formidable.IncomingForm().parse(req, function(err, fields, files) 
+      {
+        apiCaller(req, res, fields)
+      });
     });
     
     //The Etherpad client side sends information about how a disconnect happen
@@ -425,19 +476,19 @@ async.waterfall([
     io.set('logger', {
       debug: function (str)
       {
-        socketIOLogger.debug(str);
+        socketIOLogger.debug.apply(socketIOLogger, arguments);
       }, 
       info: function (str)
       {
-        socketIOLogger.info(str);
+        socketIOLogger.info.apply(socketIOLogger, arguments);
       },
       warn: function (str)
       {
-        socketIOLogger.warn(str);
+        socketIOLogger.warn.apply(socketIOLogger, arguments);
       },
       error: function (str)
       {
-        socketIOLogger.error(str);
+        socketIOLogger.error.apply(socketIOLogger, arguments);
       },
     });
     

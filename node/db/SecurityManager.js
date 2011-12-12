@@ -17,12 +17,14 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
- 
+
+var ERR = require("async-stacktrace");
 var db = require("./DB").db;
 var async = require("async");
 var authorManager = require("./AuthorManager");
 var padManager = require("./PadManager");
 var sessionManager = require("./SessionManager");
+var settings = require("../utils/Settings")
 
 /**
  * This function controlls the access to a pad, it checks if the user can access a pad.
@@ -34,19 +36,18 @@ var sessionManager = require("./SessionManager");
  */ 
 exports.checkAccess = function (padID, sessionID, token, password, callback)
 { 
-  // it's not a group pad, means we can grant access
-  /*if(padID.indexOf("$") == -1)
+  var statusObject;
+
+  // a valid session is required (api-only mode)
+  if(settings.requireSession)
   {
-    //get author for this token
-    authorManager.getAuthor4Token(token, function(err, author)
+    // no sessionID, access is denied
+    if(!sessionID)
     {
-      // grant access, with author of token
-      callback(err, {accessStatus: "grant", authorID: author});
-    })
-    
-    //don't continue
-    return;
-  }*/
+      callback(null, {accessStatus: "deny"});
+      return;
+    }
+  }
    
   var groupID = padID.split("$")[0];
   var padExists = false;
@@ -58,8 +59,6 @@ exports.checkAccess = function (padID, sessionID, token, password, callback)
   var isPasswordProtected;
   var passwordStatus = password == null ? "notGiven" : "wrong"; // notGiven, correct, wrong
 
-  var statusObject;
-
   async.series([
     //get basic informations from the database 
     function(callback)
@@ -70,8 +69,9 @@ exports.checkAccess = function (padID, sessionID, token, password, callback)
         {
           padManager.doesPadExists(padID, function(err, exists)
           {
+            if(ERR(err, callback)) return;
             padExists = exists;
-            callback(err);
+            callback();
           });
         },
         //get informations about this session
@@ -80,13 +80,13 @@ exports.checkAccess = function (padID, sessionID, token, password, callback)
           sessionManager.getSessionInfo(sessionID, function(err, sessionInfo)
           {
             //skip session validation if the session doesn't exists
-            if(err && err.stop == "sessionID does not exist")
+            if(err && err.message == "sessionID does not exist")
             {
               callback();
               return;
             }
             
-            if(err) {callback(err); return}
+            if(ERR(err, callback)) return;
             
             var now = Math.floor(new Date().getTime()/1000);
             
@@ -107,8 +107,9 @@ exports.checkAccess = function (padID, sessionID, token, password, callback)
           //get author for this token
           authorManager.getAuthor4Token(token, function(err, author)
           {
+            if(ERR(err, callback)) return;
             tokenAuthor = author;
-            callback(err);
+            callback();
           });
         }
       ], callback);
@@ -125,7 +126,7 @@ exports.checkAccess = function (padID, sessionID, token, password, callback)
       
       padManager.getPad(padID, function(err, pad)
       {
-        if(err) {callback(err); return}
+        if(ERR(err, callback)) return;
         
         //is it a public pad?
         isPublic = pad.getPublicStatus();
@@ -185,6 +186,8 @@ exports.checkAccess = function (padID, sessionID, token, password, callback)
       {
         //--> grant access
         statusObject = {accessStatus: "grant", authorID: sessionAuthor};
+        //--> deny access if user isn't allowed to create the pad
+        if(settings.editOnly) statusObject.accessStatus = "deny";
       }
       // there is no valid session avaiable AND pad exists
       else if(!validSession && padExists)
@@ -235,6 +238,7 @@ exports.checkAccess = function (padID, sessionID, token, password, callback)
     }
   ], function(err)
   {
-    callback(err, statusObject);
+    if(ERR(err, callback)) return;
+    callback(null, statusObject);
   });
 }

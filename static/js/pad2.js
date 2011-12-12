@@ -1,4 +1,10 @@
 /**
+ * This code is mostly from the old Etherpad. Please help us to comment this code. 
+ * This helps other people to understand this code better and helps them to improve it.
+ * TL;DR COMMENTS ON THIS FILE ARE HIGHLY APPRECIATED
+ */
+
+/**
  * Copyright 2009 Google Inc., 2011 Peter 'Pita' Martischka (Primary Technology Ltd)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -21,6 +27,8 @@ var LineNumbersDisabled = false;
 var noColors = false;
 var useMonospaceFontGlobal = false;
 var globalUserName = false;
+var hideQRCode = false;
+var rtlIsTrue = false;
 
 $(document).ready(function()
 {
@@ -83,18 +91,22 @@ function randomString()
 
 function getParams()
 {
-  var showControls = getUrlVars()["showControls"];
-  var showChat = getUrlVars()["showChat"];
-  var userName = unescape(getUrlVars()["userName"]);
-  var showLineNumbers = getUrlVars()["showLineNumbers"];
-  var useMonospaceFont = getUrlVars()["useMonospaceFont"];
-  var IsnoColors = getUrlVars()["noColors"];
+  var params = getUrlVars()
+  var showControls = params["showControls"];
+  var showChat = params["showChat"];
+  var userName = params["userName"];
+  var showLineNumbers = params["showLineNumbers"];
+  var useMonospaceFont = params["useMonospaceFont"];
+  var IsnoColors = params["noColors"];
+  var hideQRCode = params["hideQRCode"];
+  var rtl = params["rtl"];
 
   if(IsnoColors)
   {
     if(IsnoColors == "true")
     {
       noColors = true;
+      $('#clearAuthorship').hide();
     }
   }
   if(showControls)
@@ -105,7 +117,6 @@ function getParams()
       $('#editorcontainer').css({"top":"0px"});
     }
   }
-
   if(showChat)
   {
     if(showChat == "false")
@@ -113,7 +124,6 @@ function getParams()
       $('#chaticon').hide();
     }
   }
-
   if(showLineNumbers)
   {
     if(showLineNumbers == "false")
@@ -121,7 +131,6 @@ function getParams()
       LineNumbersDisabled = true;
     }
   }
-
   if(useMonospaceFont)
   {
     if(useMonospaceFont == "true")
@@ -129,12 +138,21 @@ function getParams()
       useMonospaceFontGlobal = true;
     }
   }
-
-
   if(userName)
   {
     // If the username is set as a parameter we should set a global value that we can call once we have initiated the pad.
-    globalUserName = userName;
+    globalUserName = unescape(userName);
+  }
+  if(hideQRCode)
+  {
+    $('#qrcode').hide();
+  }
+  if(rtl)
+  {
+    if(rtl == "true")
+    {
+      rtlIsTrue = true
+    }
   }
 }
 
@@ -182,15 +200,17 @@ function handshake()
   var resource = loc.pathname.substr(1, loc.pathname.indexOf("/p/")) + "socket.io";
   //connect
   socket = io.connect(url, {
-    resource: resource
+    resource: resource,
+    'max reconnection attempts': 3
   });
 
-  socket.once('connect', function()
+  function sendClientReady(isReconnect)
   {
     var padId = document.location.pathname.substring(document.location.pathname.lastIndexOf("/") + 1);
-    padId = unescape(padId); // unescape neccesary due to Safari and Opera interpretation of spaces
+    padId = decodeURIComponent(padId); // unescape neccesary due to Safari and Opera interpretation of spaces
 
-    document.title = document.title + " | " + padId;
+    if(!isReconnect)
+      document.title = document.title + " | " + padId;
 
     var token = readCookie("token");
     if (token == null)
@@ -211,7 +231,43 @@ function handshake()
       "token": token,
       "protocolVersion": 2
     };
+    
+    //this is a reconnect, lets tell the server our revisionnumber
+    if(isReconnect == true)
+    {
+      msg.client_rev=pad.collabClient.getCurrentRevisionNumber();
+      msg.reconnect=true;
+    }
+    
     socket.json.send(msg);
+  };
+
+  var disconnectTimeout;
+
+  socket.once('connect', function () {
+    sendClientReady(false);
+  });
+  
+  socket.on('reconnect', function () {
+    //reconnect is before the timeout, lets stop the timeout
+    if(disconnectTimeout)
+    {
+      clearTimeout(disconnectTimeout);
+    }
+
+    pad.collabClient.setChannelState("CONNECTED");
+    sendClientReady(true);
+  });
+  
+  socket.on('disconnect', function () {
+    function disconnectEvent()
+    {
+      pad.collabClient.setChannelState("DISCONNECTED", "reconnect_timeout");
+    }
+    
+    pad.collabClient.setChannelState("RECONNECTING");
+    
+    disconnectTimeout = setTimeout(disconnectEvent, 10000);
   });
 
   var receivedClientVars = false;
@@ -269,6 +325,11 @@ function handshake()
       if (noColors == true)
       {
         pad.changeViewOption('noColors', true);
+      }
+      
+      if (rtlIsTrue == true)
+      {
+        pad.changeViewOption('rtl', true);
       }
 
       // If the Monospacefont value is set to true then change it to monospace.
@@ -369,7 +430,6 @@ var pad = {
   
     //initialize the chat
     chat.init();
-    pad.diagnosticInfo.uniqueId = padutils.uniqueId();
     pad.initTime = +(new Date());
     pad.padOptions = clientVars.initialOptions;
 
@@ -673,7 +733,22 @@ var pad = {
     else if (newState == "DISCONNECTED")
     {
       pad.diagnosticInfo.disconnectedMessage = message;
-      pad.diagnosticInfo.padInitTime = pad.initTime;
+      pad.diagnosticInfo.padId = pad.getPadId();
+      pad.diagnosticInfo.socket = {};
+      
+      //we filter non objects from the socket object and put them in the diagnosticInfo 
+      //this ensures we have no cyclic data - this allows us to stringify the data
+      for(var i in socket.socket)
+      {
+        var value = socket.socket[i];
+        var type = typeof value;
+        
+        if(type == "string" || type == "number")
+        {
+          pad.diagnosticInfo.socket[i] = value;
+        }
+      }
+    
       pad.asyncSendDiagnosticInfo();
       if (typeof window.ajlog == "string")
       {
@@ -745,7 +820,6 @@ var pad = {
   },
   asyncSendDiagnosticInfo: function()
   {
-    pad.diagnosticInfo.collabDiagnosticInfo = pad.collabClient.getDiagnosticInfo();
     window.setTimeout(function()
     {
       $.ajax(
@@ -753,7 +827,6 @@ var pad = {
         type: 'post',
         url: '/ep/pad/connection-diagnostic-info',
         data: {
-          padId: pad.getPadId(),
           diagnosticInfo: JSON.stringify(pad.diagnosticInfo)
         },
         success: function()
@@ -833,7 +906,7 @@ var pad = {
   },
   preloadImages: function()
   {
-    var images = []; // Removed as we now use CSS and JS for colorpicker
+    var images = ["../static/img/connectingbar.gif"];
 
     function loadNextImage()
     {

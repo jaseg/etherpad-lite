@@ -1,9 +1,3 @@
-/**
- * This code is mostly from the old Etherpad. Please help us to comment this code. 
- * This helps other people to understand this code better and helps them to improve it.
- * TL;DR COMMENTS ON THIS FILE ARE HIGHLY APPRECIATED
- */
-
 // THIS FILE IS ALSO AN APPJET MODULE: etherpad.collab.ace.contentcollector
 // %APPJET%: import("etherpad.collab.ace.easysync2.Changeset");
 // %APPJET%: import("etherpad.admin.plugins");
@@ -23,6 +17,8 @@
  * limitations under the License.
  */
 
+var Changeset = require("../utils/Changeset");
+
 var _MAX_LIST_LEVEL = 8;
 
 function sanitizeUnicode(s)
@@ -41,7 +37,7 @@ function makeContentCollector(collectStyles, browser, apool, domInterface, class
   }
   else
   {
-    plugins_ = parent.parent.plugins;
+    plugins_ = {callHook: function () {}};
   }
 
   var dom = domInterface || {
@@ -479,7 +475,7 @@ function makeContentCollector(collectStyles, browser, apool, domInterface, class
           if (tname == "ul")
           {
             var type;
-            var rr = cls && /(?:^| )list-([a-z]+[12345678])\b/.exec(cls);
+            var rr = cls && /(?:^| )list-(bullet[12345678])\b/.exec(cls);
             type = rr && rr[1] || "bullet" + String(Math.min(_MAX_LIST_LEVEL, (state.listNesting || 0) + 1));
             oldListTypeOrNull = (_enterList(state, type) || 'none');
           }
@@ -692,3 +688,5 @@ function makeContentCollector(collectStyles, browser, apool, domInterface, class
 
   return cc;
 }
+
+exports.makeContentCollector = makeContentCollector;
